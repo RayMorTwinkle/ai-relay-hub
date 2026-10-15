@@ -1,0 +1,28 @@
+# ai-relay-hub —— 三反代 + new-api 聚合，一键单镜像
+# 用法：docker compose up -d --build
+# 对外只发布两个端口：8080（唯一 API 出口）、8788（wb 看板，默认仅本机回环）
+
+services:
+  ai-relay-hub:
+    build:
+      context: .
+      # GitHub 直连受限时打开下一行（或 export GH_PROXY_PREFIX）
+      # args:
+      #   GH_PROXY_PREFIX: https://gh-proxy.com/
+    image: ai-relay-hub:local
+    container_name: ai-relay-hub
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${AGG_PORT:-8080}:${AGG_PORT:-8080}"                 # 统一出口
+      - "127.0.0.1:${WB_PORT:-8788}:${WB_PORT:-8788}"         # wb 面板（仅本机，供 OAuth 加账号）
+    volumes:
+      - ./data:/data
+    environment:
+      TZ: Asia/Shanghai
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:${AGG_PORT:-8080}/api/status"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s

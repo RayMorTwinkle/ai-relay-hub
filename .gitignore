@@ -1,0 +1,19 @@
+# 运行时数据（账号 / 用量 / sqlite / 日志）——永远不入库
+data/
+*.db
+*.sqlite*
+*.log
+
+# 本地配置
+.env
+.env.local
+*.local
+
+# 构建产物 / 缓存
+dist/
+build-cache/
+__pycache__/
+*.pyc
+
+# 系统
+.DS_Store
