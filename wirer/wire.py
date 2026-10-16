@@ -304,7 +304,7 @@ def main():
         for ch in desired_channels():
             name = ch["name"]
             cur = existing.get(name)
-            sig = json.dumps({k: ch[k] for k in ("base_url", "models", "model_mapping")}, sort_keys=True)
+            sig = json.dumps({k: ch[k] for k in ("base_url", "models", "model_mapping", "key")}, sort_keys=True)
             if cur and applied.get(name) == sig:
                 continue
             if cur is None:
