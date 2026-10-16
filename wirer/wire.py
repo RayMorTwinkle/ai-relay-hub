@@ -104,10 +104,13 @@ class NewAPI:
         self.jar = http.cookiejar.CookieJar()
         self.user_id = "1"
         self.sys_token = SYS_TOKEN
+        self.access_token = ""
+        self.access_exp = 0  # 秒级时间戳；过期前 60s 主动续
 
     def _headers(self):
-        if self.sys_token:
-            return {"Authorization": f"Bearer {self.sys_token}", "New-Api-User": self.user_id}
+        tok = self.sys_token or self.access_token
+        if tok:
+            return {"Authorization": f"Bearer {tok}", "New-Api-User": self.user_id}
         return {"New-Api-User": self.user_id}
 
     def setup(self):
@@ -126,6 +129,19 @@ class NewAPI:
             log(f"warn: setup exception: {e}")
             return False
 
+    def _store_login(self, r):
+        """登录成功：存 JWT access_token（rc.44+ 用 Bearer，不再走 session cookie）。"""
+        d = r.get("data") or {}
+        tok = d.get("access_token")
+        if not tok:
+            return False
+        self.access_token = tok
+        self.access_exp = int(d.get("access_expires_at") or 0)
+        uid = (d.get("user") or {}).get("id") or d.get("id")
+        if uid:
+            self.user_id = str(uid)
+        return True
+
     def login(self):
         if self.sys_token:
             return True
@@ -134,11 +150,11 @@ class NewAPI:
                           method="POST",
                           data={"username": ADMIN_USER, "password": ADMIN_PASS},
                           cookie_jar=self.jar)
-            if r.get("success"):
-                uid = (r.get("data") or {}).get("id")
-                if uid:
-                    self.user_id = str(uid)
+            if r.get("success") and self._store_login(r):
                 return True
+            if r.get("success"):
+                log("warn: login ok but no access_token in response")
+                return False
             msg = str(r.get("message") or r)
             log(f"warn: new-api login failed: {msg}")
             # 未初始化 / root 不存在 → 尝试自动 setup 后再登录一次
@@ -148,15 +164,17 @@ class NewAPI:
                                    method="POST",
                                    data={"username": ADMIN_USER, "password": ADMIN_PASS},
                                    cookie_jar=self.jar)
-                    if r2.get("success"):
-                        uid = (r2.get("data") or {}).get("id")
-                        if uid:
-                            self.user_id = str(uid)
+                    if r2.get("success") and self._store_login(r2):
                         return True
             return False
         except Exception as e:
             log(f"warn: new-api login exception: {e}")
             return False
+
+    def _token_stale(self):
+        # access_token 过期前 60s 主动重登（默认 15min TTL）
+        return not self.sys_token and (not self.access_token or
+               time.time() > self.access_exp - 60)
 
     def channels(self):
         try:
@@ -169,29 +187,41 @@ class NewAPI:
             log(f"warn: list channels -> {e}")
             return []
 
+    def _req(self, method, path, data=None):
+        """一次带 401 自动重登的受保护请求；返回 (success, json)。"""
+        for attempt in range(2):
+            if self._token_stale():
+                self.login()  # 静默续期；失败也会继续用旧 token 试（让 401 自然触发）
+            try:
+                r = http_json(f"{self.base}{path}", method=method, data=data,
+                              headers=self._headers(), cookie_jar=self.jar)
+                return r.get("success"), r
+            except urllib.error.HTTPError as e:
+                if e.code == 401 and attempt == 0:
+                    log("warn: 401 -> 重新登录后重试")
+                    self.access_token = ""
+                    self.login()
+                    continue
+                body = e.read().decode("utf-8", "replace")[:200]
+                log(f"warn: {method} {path} http {e.code}: {body}")
+                return False, {}
+            except Exception as e:
+                log(f"warn: {method} {path} exception: {e}")
+                return False, {}
+        return False, {}
+
     def create(self, ch):
         for payload in ({"mode": "single", "channel": ch}, ch):
-            try:
-                r = http_json(f"{self.base}/api/channel/", method="POST",
-                              data=payload, headers=self._headers(), cookie_jar=self.jar)
-                if r.get("success"):
-                    return True
-            except urllib.error.HTTPError as e:
-                body = e.read().decode("utf-8", "replace")[:200]
-                log(f"warn: create channel http {e.code}: {body}")
-            except Exception as e:
-                log(f"warn: create channel exception: {e}")
+            ok, _ = self._req("POST", "/api/channel/", payload)
+            if ok:
+                return True
         return False
 
     def update(self, ch):
         for payload in ({"channel": ch}, ch):
-            try:
-                r = http_json(f"{self.base}/api/channel/", method="PUT",
-                              data=payload, headers=self._headers(), cookie_jar=self.jar)
-                if r.get("success"):
-                    return True
-            except Exception as e:
-                log(f"warn: update channel exception: {e}")
+            ok, _ = self._req("PUT", "/api/channel/", payload)
+            if ok:
+                return True
         return False
 
 
