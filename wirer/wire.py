@@ -110,6 +110,22 @@ class NewAPI:
             return {"Authorization": f"Bearer {self.sys_token}", "New-Api-User": self.user_id}
         return {"New-Api-User": self.user_id}
 
+    def setup(self):
+        """new-api 未初始化时走 /api/setup 建 root（无鉴权，官方入口）。"""
+        try:
+            r = http_json(f"{self.base}/api/setup", method="POST",
+                          data={"username": ADMIN_USER, "password": ADMIN_PASS,
+                                "confirmPassword": ADMIN_PASS},
+                          cookie_jar=self.jar)
+            if r.get("success"):
+                log("new-api 已初始化 root")
+                return True
+            log(f"warn: setup failed: {r.get('message') or r}")
+            return False
+        except Exception as e:
+            log(f"warn: setup exception: {e}")
+            return False
+
     def login(self):
         if self.sys_token:
             return True
@@ -123,7 +139,20 @@ class NewAPI:
                 if uid:
                     self.user_id = str(uid)
                 return True
-            log(f"warn: new-api login failed: {r.get('message') or r}")
+            msg = str(r.get("message") or r)
+            log(f"warn: new-api login failed: {msg}")
+            # 未初始化 / root 不存在 → 尝试自动 setup 后再登录一次
+            if "initialized" in msg or "not exist" in msg or "incorrect" in msg:
+                if self.setup():
+                    r2 = http_json(f"{self.base}/api/user/login",
+                                   method="POST",
+                                   data={"username": ADMIN_USER, "password": ADMIN_PASS},
+                                   cookie_jar=self.jar)
+                    if r2.get("success"):
+                        uid = (r2.get("data") or {}).get("id")
+                        if uid:
+                            self.user_id = str(uid)
+                        return True
             return False
         except Exception as e:
             log(f"warn: new-api login exception: {e}")
