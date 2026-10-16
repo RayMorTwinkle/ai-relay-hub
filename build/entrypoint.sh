@@ -6,40 +6,48 @@
 set -euo pipefail
 
 export TZ="${TZ:-Asia/Shanghai}"
-mkdir -p /data/logs
+mkdir -p /data/logs /data/accounts /data/usage
 
-# 生成一个高熵密钥（仅当未显式注入时）；复用同一张表便于排障
+# 生成一个高熵密钥（仅当未显式注入时）
 gen_key() { python3 -c 'import secrets;print("sk-"+secrets.token_hex(20))'; }
 
-# ---- 默认值（用户 -e 注入覆盖这些）----
+# ---- 端口 ----
 export WB_PORT="${WB_PORT:-8788}"
 export QODER_PORT="${QODER_PORT:-3000}"
 export OC_PORT="${OC_PORT:-13339}"
 export AGG_PORT="${AGG_PORT:-8080}"
 
-# 三个上游/聚合层各自的内网密钥（对话只发生在容器回环内）
+# ---- 上游/聚合层各自的内网密钥（只发生在容器回环内）----
 export WB_API_KEY="${WB_API_KEY:-$(gen_key)}"
 export QODER_API_KEY="${QODER_API_KEY:-$(gen_key)}"
 export SESSION_SECRET="${SESSION_SECRET:-$(python3 -c 'import secrets;print(secrets.token_hex(32))')}"
 
-# qoder：仅 CN 后端，PAT 由环境变量注入（容器内无交互登录）
+# ---- wb 可选双区域拆分（在 wb 面板给两个 Key 分别绑国际版/国内版后填这两个）----
+export WB_API_KEY_INTL="${WB_API_KEY_INTL:-}"
+export WB_API_KEY_CN="${WB_API_KEY_CN:-}"
+
+# ---- qoder：仅 CN 后端，PAT 由环境变量注入 ----
 export QODERCN_PAT="${QODERCN_PERSONAL_ACCESS_TOKEN:-${QODERCN_PAT:-}}"
-# oc-gate：默认公共代理池回退链
+
+# ---- oc-gate ----
 export OC_PROXY_MODE="${OC_PROXY_MODE:-auto}"
 
-# new-api 初始管理员（首启创建；若上游改了默认口令，wirer 会在日志报 401）
+# ---- new-api 管理员（首启创建；若上游改了默认口令，wirer 会报 401 并提示）----
 export AGG_ADMIN_USER="${AGG_ADMIN_USER:-root}"
 export AGG_ADMIN_PASS="${AGG_ADMIN_PASS:-123456}"
+export SYSTEM_ACCESS_TOKEN="${SYSTEM_ACCESS_TOKEN:-}"
+
+# ---- wirer ----
+export WIRER_INTERVAL="${WIRER_INTERVAL:-30}"
+export WIRER_BOOT_WAIT="${WIRER_BOOT_WAIT:-5}"
 
 cat <<EOF
 ============================================================
  ai-relay-hub 启动中
   唯一出口      : http://127.0.0.1:${AGG_PORT}/v1
-  wb 看板(加账号): http://127.0.0.1:${WB_PORT}
+  new-api 面板  : http://<host>:${AGG_PORT}   (root / 123456 — 立即改)
+  wb 看板(加账号): http://<host>:${WB_PORT}
   数据目录      : /data
-  密钥(未注入时自动生成)：
-    WB_API_KEY=${WB_API_KEY}
-    QODER_API_KEY=${QODER_API_KEY}
 ============================================================
 EOF
 

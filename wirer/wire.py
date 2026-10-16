@@ -177,7 +177,7 @@ def build_channel(name, base_url, key, upstream_models, prefix):
         "key": key or "sk-placeholder",
         "models": ",".join(public),
         "model_mapping": json.dumps(mapping, ensure_ascii=False),
-        "groups": ["default"],
+        "group": "default",             # new-api 是逗号分隔字符串，不是数组
         "priority": 0,
         "weight": 1,
         "status": 1,

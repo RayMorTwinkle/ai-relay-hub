@@ -1,0 +1,15 @@
+# 预构建镜像版：不在本机构建，直接 pull（ghcr 发布后的用法）
+# 用法：docker compose -f docker-compose.pull.yml up -d
+services:
+  ai-relay-hub:
+    image: ${IMAGE:-ghcr.io/raymortwinkle/ai-relay-hub:latest}
+    container_name: ai-relay-hub
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${AGG_PORT:-8080}:${AGG_PORT:-8080}"
+      - "127.0.0.1:${WB_PORT:-8788}:${WB_PORT:-8788}"
+    volumes:
+      - ./data:/data
+    environment:
+      TZ: Asia/Shanghai
