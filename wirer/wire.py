@@ -218,11 +218,10 @@ class NewAPI:
         return False
 
     def update(self, ch):
-        for payload in ({"channel": ch}, ch):
-            ok, _ = self._req("PUT", "/api/channel/", payload)
-            if ok:
-                return True
-        return False
+        """最小 PATCH：id + key + 可写字段（防 status read-only，绕开 GET key 被抹掉）。"""
+        patch = {k: ch[k] for k in ("id", "name", "type", "base_url", "key", "models", "model_mapping") if ch.get(k) is not None}
+        ok, _ = self._req("PUT", "/api/channel/", patch)
+        return ok
 
 
 def build_channel(name, base_url, key, upstream_models, prefix):
