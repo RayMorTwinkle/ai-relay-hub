@@ -34,7 +34,7 @@ export OC_PROXY_MODE="${OC_PROXY_MODE:-auto}"
 
 # ---- new-api 管理员（首启创建；若上游改了默认口令，wirer 会报 401 并提示）----
 export AGG_ADMIN_USER="${AGG_ADMIN_USER:-root}"
-export AGG_ADMIN_PASS="${AGG_ADMIN_PASS:-123456}"
+export AGG_ADMIN_PASS="${AGG_ADMIN_PASS:-Relay@4001}"
 export SYSTEM_ACCESS_TOKEN="${SYSTEM_ACCESS_TOKEN:-}"
 
 # ---- wirer ----
